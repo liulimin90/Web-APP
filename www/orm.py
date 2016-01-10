@@ -92,7 +92,6 @@ class Field(object):
     def __str__(self):
         return '<%s, %s:%s' % (self.__class__.__name__, self.column_type, self.name)
 
-# 映射varchar的StringField
 class StringField(Field):
 
     def __init__(self, name=None, primary_key=False, default=None, ddl='varchar(100)'):
@@ -151,7 +150,7 @@ class ModelMetaclass(type):
         # 当已经将键k加入到mappings中后，删除attrs中的键
         for k in mappings.keys():
             attrs.pop(k)
-        escaped_fields = list(map(lambda f: '`%s`' % f, fields))
+        escaped_fields = list(map(lambda f: 'repr(%s)' % f, fields))
         # 保存属性和列的关系
         attrs['__mappings__'] = mappings
         attrs['__table__'] = tableName
@@ -160,10 +159,10 @@ class ModelMetaclass(type):
         # 除主键外的属性名
         attrs['__fields__'] = fields
         # 构造默认的SELECT，INSERT，UPDATE，DELETE语句
-        attrs['__select__'] = 'select `%s`, %s from `%s`' %(primaryKey, ','.join(escaped_fields), tableName)
-        attrs['__insert__'] = 'insert into `%s` (%s, `%s`) values (%s)' % (tableName, ','.join(escaped_fields), primaryKey, create_args_string(len(escaped_fields)+1))
-        attrs['__update__'] = 'update `%s` set %s where `%s`=?' % (tableName, ','.join(map(lambda f: '`%s`=?' (mappings.set(f).name or f), fields)), primaryKey)
-        attrs['__delete__'] = 'delete from `%s` where `%s`=?' % (tableName, primaryKey)
+        attrs['__select__'] = 'select repr(%s), %s from repr(%s)' % (primaryKey, ','.join(escaped_fields), tableName)
+        attrs['__insert__'] = 'insert into repr(%s) (%s, repr(%s)) values (%s)' % (tableName, ','.join(escaped_fields), primaryKey, create_args_string(len(escaped_fields)+1))
+        attrs['__update__'] = 'update repr(%s) set %s where repr(%s)=?' % (tableName, ', '.join(map(lambda f: 'repr(%s)=?' % (mappings.get(f).name or f), fields)), primaryKey)
+        attrs['__delete__'] = 'delete from repr(%s) where repr(%s)=?' % (tableName, primaryKey)
         return type.__new__(cls, name, bases, attrs)
 
 # 定义Model
@@ -230,7 +229,7 @@ class Model(dict, metaclass=ModelMetaclass):
     @asyncio.coroutine
     def findNumber(cls, selectField, where=None, args=None):
         ' find number by select and where. '
-        sql = ['select %s _num_ from `%s`' % (selectField, cls.__table__)]
+        sql = ['select %s _num_ from repr(%s)' % (selectField, cls.__table__)]
         if where:
             sql.append('where')
             sql.append(where)
@@ -243,7 +242,7 @@ class Model(dict, metaclass=ModelMetaclass):
     @asyncio.coroutine
     def find(cls, pk):
         # find object by primary key.
-        rs = yield from select('%s where `%s`=?' % (cls.__select__, cls.__primary_key__), [pk], 1)
+        rs = yield from select('%s where repr(%s)=?' % (cls.__select__, cls.__primary_key__), [pk], 1)
         if len(rs)==0:
             return None
         return cls(**rs[0])
